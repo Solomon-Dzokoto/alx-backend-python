@@ -5,8 +5,9 @@ except Exception:
     aiosqlite = None
 
 
-async def async_fetch_users(db_path='users.db'):
+async def async_fetch_users():
     """Fetch all users asynchronously using aiosqlite."""
+    db_path = 'users.db'
     if aiosqlite is None:
         raise RuntimeError('aiosqlite is not installed')
     async with aiosqlite.connect(db_path) as db:
@@ -15,8 +16,9 @@ async def async_fetch_users(db_path='users.db'):
             return rows
 
 
-async def async_fetch_older_users(db_path='users.db'):
+async def async_fetch_older_users():
     """Fetch users older than 40 asynchronously."""
+    db_path = 'users.db'
     if aiosqlite is None:
         raise RuntimeError('aiosqlite is not installed')
     async with aiosqlite.connect(db_path) as db:
