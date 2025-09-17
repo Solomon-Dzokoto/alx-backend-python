@@ -30,8 +30,21 @@ class TestGithubOrgClient(unittest.TestCase):
 			gh = GithubOrgClient('test')
 			repos = gh.public_repos()
 			self.assertEqual(repos, fixtures.expected_repos)
+			# Ensure the patched property (mock) was accessed and requests.get called
 			mock_prop.assert_called()
-			mock_get.assert_called()
+			mock_get.assert_called_once_with(mock_prop.return_value)
+
+	@patch('client.requests.get')
+	def test_public_repos_with_license(self, mock_get):
+		# Test filtering by license key
+		mock_get.return_value.json.return_value = fixtures.repos_payload
+		with patch.object(GithubOrgClient, '_public_repos_url', new_callable=Mock) as mock_prop:
+			mock_prop.return_value = 'https://api.github.com/orgs/test/repos'
+			gh = GithubOrgClient('test')
+			repos = gh.public_repos(license='apache-2.0')
+			self.assertEqual(repos, fixtures.apache2_repos)
+			mock_prop.assert_called()
+			mock_get.assert_called_once_with(mock_prop.return_value)
 
 	def test_has_license(self):
 		cases = [
