@@ -1,13 +1,24 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework import filters
+from django_filters.rest_framework import DjangoFilterBackend
+
 from .models import Conversation, Message, User
 from .serializers import ConversationSerializer, MessageSerializer, UserSerializer
+from .permissions import IsAuthenticatedAndParticipant
+from .filters import MessageFilter, ConversationFilter
+from .pagination import MessagesPagination
 
 
 class ConversationViewSet(viewsets.ModelViewSet):
     queryset = Conversation.objects.all().prefetch_related('participants', 'messages')
     serializer_class = ConversationSerializer
+    permission_classes = [IsAuthenticatedAndParticipant]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_class = ConversationFilter
+    ordering_fields = ['created_at']
+    pagination_class = MessagesPagination
 
     def create(self, request, *args, **kwargs):
         # Expect participants as list of user ids in request.data['participants']
@@ -26,6 +37,11 @@ class ConversationViewSet(viewsets.ModelViewSet):
 class MessageViewSet(viewsets.ModelViewSet):
     queryset = Message.objects.all().select_related('sender', 'conversation')
     serializer_class = MessageSerializer
+    permission_classes = [IsAuthenticatedAndParticipant]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_class = MessageFilter
+    ordering_fields = ['sent_at']
+    pagination_class = MessagesPagination
 
     def create(self, request, *args, **kwargs):
         # Expect 'sender' to be user id and 'conversation' to be conversation id
