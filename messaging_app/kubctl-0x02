@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# kubctl-0x02 - Apply blue & green deployments and service, then check logs for green pods
+set -euo pipefail
+
+echo "Applying blue deployment..."
+kubectl apply -f blue_deployment.yaml
+
+echo "Applying service (routes to blue initially)..."
+kubectl apply -f kubeservice.yaml
+
+echo "Check pods for blue:"
+kubectl get pods -l version=blue
+
+echo "Applying green deployment (new version)..."
+kubectl apply -f green_deployment.yaml
+
+echo "Check pods for green:"
+kubectl get pods -l version=green
+
+echo "Tailing logs for green pods (last 100 lines)..."
+for pod in $(kubectl get pods -l version=green -o name); do
+  echo "--- Logs for $pod ---"
+  kubectl logs --tail=100 $pod || true
+done
+
+echo "To switch traffic to green, change the Service selector to version: green in kubeservice.yaml and re-apply."

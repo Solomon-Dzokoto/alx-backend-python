@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# kubctl-0x01 - scale deployment to 3 replicas, verify pods, run a simple wrk load test if available, and show resource usage
+set -euo pipefail
+
+DEPLOYMENT_NAME=django-messaging-app
+NAMESPACE=default
+TARGET_REPLICAS=3
+
+echo "Scaling deployment $DEPLOYMENT_NAME to $TARGET_REPLICAS replicas..."
+kubectl scale deployment/$DEPLOYMENT_NAME --replicas=$TARGET_REPLICAS
+
+echo "Waiting for pods to be ready..."
+kubectl wait --for=condition=available --timeout=120s deployment/$DEPLOYMENT_NAME || true
+
+echo "Current pods:"
+kubectl get pods -o wide
+
+if command -v wrk >/dev/null 2>&1; then
+  echo "Running a short wrk load test against the service via minikube service tunnel..."
+  # open a tunnel to the service in background
+  kubectl port-forward svc/django-messaging-service 8000:8000 >/dev/null 2>&1 &
+  PF_PID=$!
+  sleep 1
+  echo "Running wrk for 10s against http://127.0.0.1:8000/"
+  wrk -t2 -c10 -d10s http://127.0.0.1:8000/
+  kill $PF_PID || true
+else
+  echo "wrk not installed; to run load tests install wrk (https://github.com/wg/wrk)"
+fi
+
+if command -v kubectl >/dev/null 2>&1; then
+  if kubectl top nodes >/dev/null 2>&1; then
+    echo "Cluster resource usage (nodes):"
+    kubectl top nodes
+    echo "Cluster resource usage (pods):"
+    kubectl top pods --all-namespaces || true
+  else
+    echo "Metrics server not available. Install metrics-server to use 'kubectl top'."
+  fi
+fi
+
+echo "Done."

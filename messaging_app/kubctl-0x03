@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# kubctl-0x03 - Update blue_deployment image to 2.0, apply rolling update, monitor rollout and do curl-based availability test
+set -euo pipefail
+
+DEPLOYMENT_FILE=blue_deployment.yaml
+DEPLOYMENT_NAME=django-messaging-blue
+
+if [ ! -f "$DEPLOYMENT_FILE" ]; then
+  echo "$DEPLOYMENT_FILE not found"
+  exit 1
+fi
+
+echo "Patching deployment image to :2.0"
+kubectl set image deployment/$DEPLOYMENT_NAME django-messaging-app=your-dockerhub-user/django-messaging-app:2.0 || true
+
+echo "Waiting for rollout to finish..."
+kubectl rollout status deployment/$DEPLOYMENT_NAME --timeout=120s
+
+echo "Starting a background curl loop to monitor availability (will run 30s)..."
+kubectl port-forward svc/django-messaging-service 8000:8000 >/dev/null 2>&1 &
+PF_PID=$!
+sleep 1
+
+END=$((SECONDS+30))
+while [ $SECONDS -lt $END ]; do
+  if curl -sS -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/; then
+    echo "$(date +%T) - healthy"
+  else
+    echo "$(date +%T) - failed"
+  fi
+  sleep 2
+done
+
+kill $PF_PID || true
+
+echo "Current pods:"
+kubectl get pods -o wide
+
+echo "Rolling update complete."

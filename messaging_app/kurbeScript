@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# kurbeScript - start minikube, verify cluster and list pods
+set -euo pipefail
+
+echo "Checking for required tools: minikube, kubectl"
+if ! command -v minikube >/dev/null 2>&1; then
+  echo "minikube not found. Installing instructions: https://minikube.sigs.k8s.io/docs/start/"
+  exit 1
+fi
+
+if ! command -v kubectl >/dev/null 2>&1; then
+  echo "kubectl not found. Install from https://kubernetes.io/docs/tasks/tools/"
+  exit 1
+fi
+
+echo "Starting minikube (this may take a few minutes)..."
+minikube start
+
+echo "Verifying cluster..."
+kubectl cluster-info
+
+echo "Fetching pods in all namespaces..."
+kubectl get pods -A
+
+echo "Done. To stop the cluster: minikube stop"
