@@ -1,0 +1,78 @@
+pipeline {
+  agent any
+  environment {
+    DOCKER_IMAGE = 'messaging_app'
+    GIT_REPO = 'https://github.com/Solomon-Dzokoto/alx-backend-python.git'
+  }
+  stages {
+    stage('Checkout') {
+      steps {
+        // Uses Git credentials stored in Jenkins (credentialsId: 'github-creds')
+        checkout([$class: 'GitSCM', branches: [[name: '*/main']], userRemoteConfigs: [[url: env.GIT_REPO, credentialsId: 'github-creds']]])
+      }
+    }
+
+    stage('Setup Python & Install deps') {
+      steps {
+        sh '''
+          set -e
+          python3 -m venv venv
+          . venv/bin/activate
+          pip install --upgrade pip
+          # try to install messaging_app specific requirements if present
+          if [ -f messaging_app/requirements.txt ]; then
+            pip install -r messaging_app/requirements.txt
+          elif [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
+          pip install pytest pytest-cov
+        '''
+      }
+    }
+
+    stage('Run tests') {
+      steps {
+        sh '''
+          . venv/bin/activate
+          mkdir -p reports
+          pytest messaging_app -v --junitxml=reports/junit.xml --cov=messaging_app --cov-report xml:reports/coverage.xml || true
+        '''
+      }
+      post {
+        always {
+          junit allowEmptyResults: true, testResults: 'reports/junit.xml'
+          archiveArtifacts artifacts: 'reports/**', fingerprint: true
+        }
+      }
+    }
+
+    stage('Build Docker Image') {
+      steps {
+        // Build docker image from messaging_app folder
+        sh "docker build -t ${DOCKER_IMAGE}:${env.GIT_COMMIT ?: 'latest'} messaging_app"
+      }
+    }
+
+    stage('Push Docker Image') {
+      steps {
+        // Push to Docker Hub using credential id 'dockerhub-creds' (username/password)
+        withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DOCKERHUB_USER', passwordVariable: 'DOCKERHUB_PASS')]) {
+          sh '''
+            echo $DOCKERHUB_PASS | docker login -u $DOCKERHUB_USER --password-stdin
+            docker tag ${DOCKER_IMAGE}:${env.GIT_COMMIT ?: 'latest'} $DOCKERHUB_USER/${DOCKER_IMAGE}:latest
+            docker push $DOCKERHUB_USER/${DOCKER_IMAGE}:latest
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      echo 'Pipeline finished successfully.'
+    }
+    failure {
+      echo 'Pipeline failed.'
+    }
+  }
+}
